@@ -1,0 +1,9 @@
+aiohttp==3.9.1
+aiogram==3.0.0b7
+aiofiles==23.2.1
+sqlalchemy==2.0.23
+asyncpg==0.29.0
+beautifulsoup4==4.12.2
+requests==2.31.0
+python-dotenv==1.0.0
+apscheduler==3.10.1
