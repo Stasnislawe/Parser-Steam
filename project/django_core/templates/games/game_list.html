@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+
+{% load static %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="games-container grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+    {% for game in games %}
+    <div class="game-card bg-dark-100 rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+        {% if game.image_url %}
+        <img src="{{ game.image_url }}" alt="{{ game.title }}" 
+             class="game-image w-full h-48 object-cover" 
+             onerror="this.src='https://via.placeholder.com/300x200/1a202c/2d3748?text=No+Image'">
+        {% else %}
+        <div class="w-full h-48 bg-dark-300 flex items-center justify-center">
+            <span class="text-gray-400">No Image</span>
+        </div>
+        {% endif %}
+        
+        <div class="p-4">
+            <h3 class="game-title text-lg font-bold text-white mb-3 line-clamp-2">{{ game.title }}</h3>
+            
+            <div class="game-prices flex items-center gap-2 mb-3">
+                <span class="current-price text-green-400 font-bold text-xl">{{ game.current_price }}</span>
+                {% if game.original_price and game.original_price != game.current_price %}
+                <span class="original-price text-gray-400 line-through text-sm">{{ game.original_price }}</span>
+                {% endif %}
+                {% if game.discount_percent %}
+                <span class="discount bg-red-600 text-white px-2 py-1 rounded text-xs font-bold">
+                    -{{ game.discount_percent }}%
+                </span>
+                {% endif %}
+            </div>
+            
+            {% if game.review_rating %}
+            <div class="game-rating flex items-center gap-2 mb-3">
+                <span class="text-yellow-400">⭐</span>
+                <span class="text-white text-sm">{{ game.review_rating }}</span>
+                {% if game.review_count %}
+                <span class="text-gray-400 text-sm">({{ game.review_count }})</span>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            {% if game.short_description %}
+            <p class="game-description text-gray-300 text-sm mb-4 line-clamp-3">
+                {{ game.short_description }}
+            </p>
+            {% elif game.description %}
+            <p class="game-description text-gray-300 text-sm mb-4 line-clamp-3">
+                {{ game.description|truncatewords:30 }}
+            </p>
+            {% endif %}
+            
+            <div class="flex justify-between items-center">
+                <a href="{{ game.url }}" target="_blank" 
+                   class="steam-btn bg-[#1b2838] hover:bg-[#2a475e] text-white px-4 py-2 rounded font-bold transition-colors duration-200 text-sm">
+                    Купить в Steam
+                </a>
+                
+                {% if game.release_date %}
+                <span class="text-gray-400 text-xs">{{ game.release_date }}</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if has_next %}
+<div id="loading" class="loading text-center py-8" style="display: none;">
+    <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+    <p class="text-gray-400 mt-2">Загружаем еще игры...</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Передаем переменные из Django в JavaScript
+    const GAME_CONFIG = {
+        nextPage: {{ next_page_number|default:2 }},
+        hasNext: {{ has_next|yesno:"true,false" }},
+        loadMoreUrl: "{% url 'load_more_games' %}"
+    };
+</script>
+<script src="{% static 'js/games.js' %}"></script>
+{% endblock %}

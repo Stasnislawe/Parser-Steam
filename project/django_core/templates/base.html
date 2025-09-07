@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Steam Games{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/css.css' %}">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            100: '#2D3748',
+                            200: '#1A202C',
+                            300: '#171923',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="bg-dark-200 min-h-screen text-white">
+    <!-- Кнопка открытия меню -->
+    <button onclick="toggleSidebar()" class="fixed top-4 left-4 z-50 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg shadow-lg transition-colors">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+        </svg>
+    </button>
+
+    <!-- Overlay -->
+    <div id="overlay" class="overlay fixed inset-0 bg-black bg-opacity-50 z-40" onclick="toggleSidebar()"></div>
+
+    <!-- Боковое меню -->
+    <div id="sidebar" class="sidebar fixed top-0 left-0 h-full w-80 bg-dark-300 shadow-2xl z-50 overflow-y-auto">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold">Фильтры и поиск</h2>
+                <button onclick="toggleSidebar()" class="text-gray-400 hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Поиск -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium mb-2">Поиск игр</label>
+                <input type="text" id="searchInput" placeholder="Название игры..."
+                       class="w-full bg-dark-200 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500">
+            </div>
+
+            <!-- Сортировка -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium mb-2">Сортировка</label>
+                <select id="sortSelect" class="w-full bg-dark-200 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500">
+                    <option value="default">По умолчанию</option>
+                    <option value="price_low">Самая низкая цена</option>
+                    <option value="price_high">Самая высокая цена</option>
+                    <option value="discount_high">Самая высокая скидка</option>
+                    <option value="discount_low">Самая низкая скидка</option>
+                    <option value="popularity">Самые популярные</option>
+                    <option value="rating_high">Высокие отзывы</option>
+                    <option value="rating_low">Низкие отзывы</option>
+                </select>
+            </div>
+
+            <!-- Кнопки применения -->
+            <div class="space-y-3">
+                <button onclick="applyFilters()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors">
+                    Применить фильтры
+                </button>
+                <button onclick="resetFilters()" class="w-full bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg font-medium transition-colors">
+                    Сбросить фильтры
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Основной контент -->
+    <div class="container mx-auto px-4 py-8">
+        {% block content %}
+        {% endblock %}
+    </div>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

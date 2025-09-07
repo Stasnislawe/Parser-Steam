@@ -257,11 +257,6 @@ class SteamBot:
         description = game.get('description', '')
         categories = game.get('categories', '[]')
 
-        # ДОБАВИМ ОТЛАДОЧНУЮ ПЕЧАТЬ ДЛЯ ПРОВЕРКИ
-        print(f"DEBUG: Режим отображения: {display_mode}")
-        print(f"DEBUG: DisplayMode.MINIMAL = {DisplayMode.MINIMAL}")
-        print(f"DEBUG: display_mode == DisplayMode.MINIMAL: {display_mode == DisplayMode.MINIMAL}")
-
         # МИНИМАЛЬНЫЙ РЕЖИМ - только самое важное
         if display_mode == DisplayMode.MINIMAL:
             response = f"🎮 <b>{title}</b>\n\n"
@@ -274,8 +269,6 @@ class SteamBot:
             else:
                 response += f"💰 <b>{current_price}</b>\n"
 
-            # Добавляем ссылку
-            response += f"\n🔗 <a href='{url}'>Купить в Steam</a>"
             return response
 
         # СТАНДАРТНЫЙ РЕЖИМ - базовая информация
