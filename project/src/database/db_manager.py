@@ -83,6 +83,10 @@ class DatabaseManager:
         try:
             print(f"💾 Пытаемся сохранить: {game_data.get('title')}")
 
+            categories = game_data.get('categories', [])
+            print(f"   Категории: {categories}")
+            print(f"   Тип категорий: {type(categories)}")
+
             # Извлекаем app_id из URL
             app_id = self.extract_app_id_from_url(game_data.get('url', ''))
             print(f"   App ID: {app_id}")
@@ -338,14 +342,211 @@ class DatabaseManager:
         """Получает самые популярные игры (по дате добавления)"""
         session = self.Session()
         try:
-            result = session.query(SteamGame).order_by(
-                desc(SteamGame.created_at)
-            ).offset(offset).limit(limit).all()
+            result = session.query(SteamGame).offset(offset).limit(limit).all()
 
             return [self._game_to_dict(game) for game in result]
         except Exception as e:
             print(f"Ошибка получения популярных игр: {e}")
             return []
+        finally:
+            session.close()
+
+    def get_all_categories(self) -> List[str]:
+        """Получает все уникальные категории из БД"""
+        session = self.Session()
+        try:
+            # Для PostgreSQL используем jsonb_array_elements_text
+            result = session.execute(text("""
+                SELECT DISTINCT jsonb_array_elements_text(
+                    categories::jsonb
+                ) as category
+                FROM steam_games 
+                WHERE categories != '[]' 
+                AND categories IS NOT NULL
+                AND jsonb_typeof(categories::jsonb) = 'array'
+                ORDER BY category
+            """))
+
+            categories = [row[0] for row in result if row[0]]
+            return categories
+
+        except Exception as e:
+            print(f"❌ Ошибка получения категорий: {e}")
+
+            # Fallback: попробуем простой способ
+            try:
+                return self._get_categories_fallback(session)
+            except Exception as fallback_error:
+                print(f"❌ Fallback также не сработал: {fallback_error}")
+                return []
+        finally:
+            session.close()
+
+    def _get_games_by_category_fallback(self, session, category: str, offset: int, limit: int) -> List[Dict]:
+        """Резервный метод поиска по категории"""
+        try:
+            # Получаем все игры с категориями
+            all_games = session.query(SteamGame).filter(
+                SteamGame.categories != None,
+                SteamGame.categories != '[]',
+                SteamGame.categories != ''
+            ).order_by(SteamGame.created_at.desc()).all()
+
+            # Фильтруем по категории
+            filtered_games = []
+            for game in all_games:
+                try:
+                    if game.categories:
+                        # Парсим JSON
+                        if game.categories.startswith('['):
+                            categories_list = json.loads(game.categories)
+                            if isinstance(categories_list, list) and category in categories_list:
+                                filtered_games.append(self._game_to_dict(game))
+                        # Или ищем в строке
+                        elif category in game.categories:
+                            filtered_games.append(self._game_to_dict(game))
+                except Exception as e:
+                    print(f"⚠️ Ошибка проверки категорий игры {game.title}: {e}")
+                    continue
+
+            # Применяем offset и limit
+            start_idx = min(offset, len(filtered_games))
+            end_idx = min(offset + limit, len(filtered_games))
+
+            return filtered_games[start_idx:end_idx]
+
+        except Exception as e:
+            print(f"❌ Fallback поиск по категории также не сработал: {e}")
+            return []
+
+    def get_games_by_category(self, category: str, offset: int = 0, limit: int = 12) -> List[Dict]:
+        """Получает игры по категории"""
+        session = self.Session()
+        try:
+            # Для PostgreSQL - получаем игры
+            result = session.execute(text("""
+                SELECT sg.* 
+                FROM steam_games sg
+                WHERE sg.categories::jsonb ? :category
+                ORDER BY sg.created_at DESC
+                LIMIT :limit 
+                OFFSET :offset
+            """), {
+                'category': category,
+                'limit': limit,
+                'offset': offset
+            })
+
+            games = []
+            for row in result:
+                # Конвертируем результат в словарь
+                game_dict = self._row_to_dict(row)
+                games.append(game_dict)
+
+            return games
+
+        except Exception as e:
+            print(f"❌ Ошибка получения игр по категории {category}: {e}")
+            # Fallback на простой поиск
+            return self._get_games_by_category_fallback(session, category, offset, limit)
+        finally:
+            session.close()
+
+    def _row_to_dict(self, row) -> Dict:
+        """Конвертирует SQL результат в словарь"""
+        return {
+            'id': row.id,
+            'title': row.title,
+            'current_price': row.current_price,
+            'original_price': row.original_price,
+            'discount': f"-{row.discount_percent}%" if getattr(row, 'discount_percent', 0) > 0 else "",
+            'url': row.url,
+            'image_url': row.image_url,
+            'categories': row.categories,
+            'review_rating': row.review_rating,
+            'review_count': row.review_count,
+            'description': row.description,
+            'timestamp': row.created_at.isoformat() if row.created_at else None
+        }
+
+    def get_categories_with_count(self) -> List[Dict]:
+        """Получает категории с количеством игр в каждой, отсортированные по убыванию"""
+        session = self.Session()
+        try:
+            # Для PostgreSQL - получаем категории с количеством игр
+            result = session.execute(text("""
+                SELECT 
+                    jsonb_array_elements_text(categories::jsonb) as category,
+                    COUNT(*) as game_count
+                FROM steam_games 
+                WHERE categories != '[]' 
+                AND categories IS NOT NULL
+                AND jsonb_typeof(categories::jsonb) = 'array'
+                GROUP BY category
+                ORDER BY game_count DESC, category
+            """))
+
+            categories_with_count = []
+            for row in result:
+                if row[0]:  # Проверяем, что категория не пустая
+                    categories_with_count.append({
+                        'name': row[0],
+                        'count': row[1]
+                    })
+
+            return categories_with_count
+
+        except Exception as e:
+            print(f"❌ Ошибка получения категорий с количеством: {e}")
+            # Fallback: получаем просто категории и считаем вручную
+            return self._get_categories_with_count_fallback(session)
+        finally:
+            session.close()
+
+    def _get_categories_with_count_fallback(self, session) -> List[Dict]:
+        """Резервный метод получения категорий с количеством"""
+        categories = self.get_all_categories()
+        categories_with_count = []
+
+        for category in categories:
+            count = self.get_games_count_by_category(category)
+            categories_with_count.append({
+                'name': category,
+                'count': count
+            })
+
+        # Сортируем по количеству (убывание), затем по названию
+        categories_with_count.sort(key=lambda x: (-x['count'], x['name']))
+        return categories_with_count
+
+    def get_games_count_by_category(self, category: str) -> int:
+        """Возвращает количество игр в категории"""
+        session = self.Session()
+        try:
+            result = session.execute(text("""
+                SELECT COUNT(*) 
+                FROM steam_games 
+                WHERE categories::jsonb ? :category
+            """), {
+                'category': category
+            })
+
+            return result.scalar() or 0
+
+        except Exception as e:
+            print(f"❌ Ошибка подсчета игр по категории {category}: {e}")
+            # Fallback
+            all_games = session.query(SteamGame).filter(
+                SteamGame.categories != None,
+                SteamGame.categories != '[]',
+                SteamGame.categories != ''
+            ).all()
+
+            count = 0
+            for game in all_games:
+                if game.categories and category in game.categories:
+                    count += 1
+            return count
         finally:
             session.close()
 

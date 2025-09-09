@@ -435,19 +435,90 @@ class SteamParserFinal:
 
         return ""
 
-    def _extract_categories(self):
-        """Извлекает категории игры"""
+    # В вашем основном парсере (steam_parser_final.py или аналогичном)
+    # Исправляем метод extract_categories
+
+    def _extract_categories(self) -> List[str]:
+        """Извлекает категории игры - УЛУЧШЕННАЯ ВЕРСИЯ"""
+        categories = []
+
         try:
-            categories = []
-            category_elements = self.driver.find_elements(
-                By.XPATH, "//div[contains(@class, 'game_category')]//a"
-            )
-            for elem in category_elements:
-                category = elem.text.strip()
-                if category:
-                    categories.append(category)
+            # 1. Попробуем найти в блоке с деталями
+            details_selectors = [
+                "//div[contains(@class, 'details_block')]//a[contains(@href, '/category/')]",
+                "//div[contains(@class, 'game_details')]//a[contains(@href, '/category/')]",
+                "//div[contains(@class, 'details')]//a[contains(@href, '/category/')]"
+            ]
+
+            for selector in details_selectors:
+                try:
+                    elements = self.driver.find_elements(By.XPATH, selector)
+                    for element in elements:
+                        category = element.text.strip()
+                        if category and len(category) > 2 and category not in categories:
+                            categories.append(category)
+                    if categories:
+                        break
+                except:
+                    continue
+
+            # 2. Если не нашли, попробуем найти теги
+            if not categories:
+                tag_selectors = [
+                    "//div[contains(@class, 'glance_tags')]//a",
+                    "//div[contains(@class, 'tags')]//a",
+                    "//div[contains(@class, 'game_tags')]//a"
+                ]
+
+                for selector in tag_selectors:
+                    try:
+                        elements = self.driver.find_elements(By.XPATH, selector)
+                        for element in elements:
+                            tag = element.text.strip()
+                            if tag and len(tag) > 2 and tag not in categories:
+                                categories.append(tag)
+                        if categories:
+                            break
+                    except:
+                        continue
+
+            # 3. Попробуем найти в блоке жанров
+            if not categories:
+                genre_selectors = [
+                    "//div[contains(@class, 'genre')]//a",
+                    "//div[contains(@class, 'genres')]//a",
+                    "//div[contains(@id, 'genres')]//a"
+                ]
+
+                for selector in genre_selectors:
+                    try:
+                        elements = self.driver.find_elements(By.XPATH, selector)
+                        for element in elements:
+                            genre = element.text.strip()
+                            if genre and len(genre) > 2 and genre not in categories:
+                                categories.append(genre)
+                        if categories:
+                            break
+                    except:
+                        continue
+
+            # 4. Попробуем найти в мета-данных
+            if not categories:
+                try:
+                    meta_elements = self.driver.find_elements(By.XPATH, "//meta[contains(@property, 'genre')]")
+                    for element in meta_elements:
+                        content = element.get_attribute('content')
+                        if content:
+                            meta_categories = [cat.strip() for cat in content.split(',')]
+                            categories.extend([cat for cat in meta_categories if cat and len(cat) > 2])
+                except:
+                    pass
+
+            print(f"✅ Найдены категории: {categories}")
             return categories
-        except:
+
+        except Exception as e:
+            print(f"❌ Ошибка извлечения категорий: {e}")
             return []
 
     def _extract_review_rating(self):

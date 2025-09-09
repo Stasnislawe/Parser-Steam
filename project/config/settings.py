@@ -3,7 +3,6 @@ import os
 from dataclasses import dataclass, asdict, field
 from typing import List, Optional, Any, Dict
 from enum import Enum
-from datetime import datetime
 
 
 class DisplayMode(Enum):
@@ -23,6 +22,7 @@ class GamesCount(Enum):
 class GameMode(Enum):
     POPULAR = "popular"
     DISCOUNTED = "discounted"
+    CATEGORY = "category"
 
 
 @dataclass
@@ -34,6 +34,7 @@ class UserPagination:
     offset: int = 0
     has_more: bool = True
     game_mode: GameMode = GameMode.POPULAR
+    current_category: str = ""  # Поле для хранения текущей категории
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -43,7 +44,8 @@ class UserPagination:
             'total_count': self.total_count,
             'offset': self.offset,
             'has_more': self.has_more,
-            'game_mode': self.game_mode.value
+            'game_mode': self.game_mode.value,
+            'current_category': self.current_category
         }
 
     @classmethod
@@ -55,7 +57,8 @@ class UserPagination:
             total_count=data.get('total_count', 0),
             offset=data.get('offset', 0),
             has_more=data.get('has_more', True),
-            game_mode=GameMode(data.get('game_mode', 'popular'))
+            game_mode=GameMode(data.get('game_mode', 'popular')),
+            current_category=data.get('current_category', '')
         )
 
 
@@ -64,25 +67,26 @@ class UserSettings:
     display_mode: DisplayMode = DisplayMode.STANDARD
     games_count: GamesCount = GamesCount.ONE
     pagination: Optional[UserPagination] = None
+    awaiting_category: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
-        """Конвертирует настройки в словарь"""
         return {
             'display_mode': self.display_mode.value,
             'games_count': self.games_count.value,
-            'pagination': self.pagination.to_dict() if self.pagination else None
+            'pagination': self.pagination.to_dict() if self.pagination else None,
+            'awaiting_category': self.awaiting_category
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'UserSettings':
-        """Создает настройки из словаря"""
         pagination_data = data.get('pagination')
         pagination = UserPagination.from_dict(pagination_data) if pagination_data else None
 
         return cls(
             display_mode=DisplayMode(data.get('display_mode', 'standard')),
             games_count=GamesCount(data.get('games_count', 1)),
-            pagination=pagination
+            pagination=pagination,
+            awaiting_category=data.get('awaiting_category', False)
         )
 
 

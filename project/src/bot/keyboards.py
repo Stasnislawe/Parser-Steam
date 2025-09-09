@@ -18,7 +18,7 @@ def get_discounts_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="🔥 Самые популярные"), KeyboardButton(text="💰 Самые высокие скидки")],
-            [KeyboardButton(text="▶️ Показать дальше"), KeyboardButton(text="🔙 Главное меню")]
+            [KeyboardButton(text="🏷️ По категориям"), KeyboardButton(text="🔙 Главное меню")]
         ],
         resize_keyboard=True
     )

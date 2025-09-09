@@ -20,8 +20,8 @@ async def main():
     await parser.close_driver()
 
     # Пауза
-    print("\n⏸️ Пауза 5 мин...")
-    await asyncio.sleep(300)
+    print("\n⏸️ Пауза 10 мин...")
+    await asyncio.sleep(600)
 
     # Сессия 2: еще 500 игр (продолжит с места остановки)
     print("\n🟢 СЕССИЯ 2: еще 500 игр")
@@ -34,6 +34,21 @@ async def main():
 
     # Закрываем драйвер
     await parser2.close_driver()
+
+    print("\n⏸️ Пауза 10 мин...")
+    await asyncio.sleep(600)
+
+    # Сессия 3: 500 игр
+    print("\n🔵 СЕССИЯ 1: 500 игр")
+    parser3 = SteamParserFinal()
+    saved, errors = await parser3.parse_page_and_save_immediate(
+        "https://store.steampowered.com/specials/?l=russian&flavor=contenthub_topsellers",
+        500
+    )
+    print(f"🎯 Сессия 3: {saved} игр сохранено, {errors} ошибок")
+
+    # Закрываем драйвер после сессии
+    await parser3.close_driver()
 
     print(f"🎉 ВСЕГО: {saved + saved2} игр, {errors + errors2} ошибок")
 

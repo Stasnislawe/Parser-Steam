@@ -71,6 +71,11 @@ class SteamBot:
             """Загружает и показывает игры с максимальными скидками"""
             await self._show_games_by_mode(message, GameMode.DISCOUNTED)
 
+        # Обработчик кнопки "По категориям"
+        @self.dp.message(F.text == "🏷️ По категориям")
+        async def by_category_button(message: types.Message):
+            await self._show_categories_list(message)
+
         # Пагинация - показать следующую партию игр
         @self.dp.message(F.text == "▶️ Показать дальше")
         async def show_next_batch(message: types.Message):
@@ -118,6 +123,19 @@ class SteamBot:
             """Обрабатывает callback'и для изменения количества показываемых игр"""
             await self._handle_count_callback(callback)
 
+        @self.dp.message(F.text & ~F.command)
+        async def handle_text_messages(message: types.Message):
+            # Проверяем, находится ли пользователь в режиме выбора категории
+            user_id = message.from_user.id
+            settings = self.settings_manager.get_user_settings(user_id)
+
+            # Проверяем специальный флаг ожидания категории
+            if hasattr(settings, 'awaiting_category') and settings.awaiting_category:
+                await self._process_category_selection(message, message.text)
+            else:
+                # Игнорируем обычные текстовые сообщения
+                await message.answer("Пожалуйста, используйте кнопки меню для навигации.")
+
     async def _show_games_by_mode(self, message: types.Message, game_mode: GameMode):
         """
         Загружает и показывает игры в зависимости от выбранного режима
@@ -164,12 +182,122 @@ class SteamBot:
             self.logger.error(f"Ошибка загрузки игр: {e}")
             await message.answer("❌ Ошибка при загрузке игр")
 
-    async def _show_next_batch(self, message: types.Message):
-        """Загружает и показывает следующую партию игр"""
+    async def _show_categories_list(self, message: types.Message):
+        """Показывает список всех категорий с количеством игр"""
+        await message.answer("🔄 Загружаю список категорий...")
+
+        try:
+            # Получаем категории с количеством игр
+            categories_with_count = self.db_manager.get_categories_with_count()
+
+            if not categories_with_count:
+                await message.answer(
+                    "❌ В базе нет категорий для фильтрации.\n"
+                    "Возможно, категории еще не были распарсены.",
+                    reply_markup=get_discounts_keyboard()
+                )
+                return
+
+            # Сохраняем состояние ожидания выбора категории
+            user_id = message.from_user.id
+            settings = self.settings_manager.get_user_settings(user_id)
+            settings.awaiting_category = True
+            settings.available_categories = [cat['name'] for cat in categories_with_count]
+
+            # Формируем сообщение со списком категорий
+            categories_text = "🏷️ <b>Доступные категории:</b>\n\n"
+
+            for i, category_info in enumerate(categories_with_count[:25], 1):  # Показываем первые 25
+                category = category_info['name']
+                count = category_info['count']
+                categories_text += f"{i}. {category} <b>({count} игр)</b>\n"
+
+            if len(categories_with_count) > 25:
+                categories_text += f"\n... и еще {len(categories_with_count) - 25} категорий\n"
+
+            categories_text += "\n📝 <b>Напишите название категории:</b>"
+
+            await message.answer(
+                categories_text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=ReplyKeyboardMarkup(
+                    keyboard=[[KeyboardButton(text="🔙 Назад")]],
+                    resize_keyboard=True
+                )
+            )
+
+        except Exception as e:
+            self.logger.error(f"Ошибка загрузки категорий: {e}")
+            await message.answer("❌ Ошибка при загрузке категорий")
+
+    async def _process_category_selection(self, message: types.Message, category_name: str):
+        """Обрабатывает выбор категории пользователем"""
+        if category_name.lower() == 'назад' or category_name == '🔙 назад':
+            await self._cancel_category_selection(message)
+            return
+
         user_id = message.from_user.id
         settings = self.settings_manager.get_user_settings(user_id)
 
-        # Проверка возможности загрузки следующих игр
+        # Сбрасываем флаг ожидания
+        settings.awaiting_category = False
+
+        await message.answer(f"🔍 Ищу игры в категории: <b>{category_name}</b>", parse_mode=ParseMode.HTML)
+
+        try:
+            # Получаем игры по категории
+            games = self.db_manager.get_games_by_category(
+                category_name,
+                limit=settings.games_count.value
+            )
+
+            total_count = self.db_manager.get_games_count_by_category(category_name)
+
+            if not games:
+                await message.answer(
+                    f"❌ Не найдено игр в категории: <b>{category_name}</b>\n"
+                    "Попробуйте другую категорию.",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=get_discounts_keyboard()
+                )
+                return
+
+            # Сохраняем пагинацию
+            settings.pagination = UserPagination(
+                current_games=games,
+                current_index=0,
+                all_loaded_games=games,
+                total_count=total_count,
+                offset=len(games),
+                has_more=len(games) < total_count,
+                game_mode=GameMode.CATEGORY,
+                current_category=category_name
+            )
+
+            # Показываем игры
+            await self._show_current_batch(message, settings)
+
+        except Exception as e:
+            self.logger.error(f"Ошибка загрузки игр по категории: {e}")
+            await message.answer("❌ Ошибка при загрузке игр")
+
+    async def _cancel_category_selection(self, message: types.Message):
+        """Отменяет выбор категории"""
+        user_id = message.from_user.id
+        settings = self.settings_manager.get_user_settings(user_id)
+        settings.awaiting_category = False
+        self.settings_manager._save_settings()
+
+        await message.answer(
+            "🔙 Возвращаемся к выбору режима",
+            reply_markup=get_discounts_keyboard()
+        )
+
+    async def _show_next_batch(self, message: types.Message):
+        """Показывает следующую партию игр"""
+        user_id = message.from_user.id
+        settings = self.settings_manager.get_user_settings(user_id)
+
         if not settings.pagination or not settings.pagination.has_more:
             await message.answer("📋 Все игры уже показаны!")
             return
@@ -177,17 +305,24 @@ class SteamBot:
         await message.answer("📥 Загружаю следующие игры...")
 
         try:
-            # Загрузка следующих игр в зависимости от режима
             if settings.pagination.game_mode == GameMode.POPULAR:
                 new_games = self.db_manager.get_most_popular_games(
-                    offset=settings.pagination.offset,  # Смещение для пагинации
-                    limit=settings.games_count.value  # Количество игр для загрузки
+                    offset=settings.pagination.offset,
+                    limit=settings.games_count.value
                 )
-            else:
+            elif settings.pagination.game_mode == GameMode.DISCOUNTED:
                 new_games = self.db_manager.get_highest_discount_games(
                     offset=settings.pagination.offset,
                     limit=settings.games_count.value
                 )
+            elif settings.pagination.game_mode == GameMode.CATEGORY:
+                new_games = self.db_manager.get_games_by_category(
+                    settings.pagination.current_category,
+                    offset=settings.pagination.offset,
+                    limit=settings.games_count.value
+                )
+            else:
+                new_games = []
 
             # Проверка успешности загрузки
             if not new_games:
